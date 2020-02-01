@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>Toulouse IA</title>
+
+<!-- Load d3.js and the geo projection plugin -->
+<script src="https://d3js.org/d3.v4.js"></script>
+<script src="https://d3js.org/d3-geo-projection.v2.min.js"></script>
+<script src="lib/d3/d3.js"></script>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.4/dist/leaflet.css" integrity="sha512-puBpdR0798OZvTTbP4A8Ix/l+A4dHDD0DGqYW6RQ+9jxkRFclaxxQb/SJAWZfWAkuyeQUytO7+7N4QKrDh+drA==" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.3.4/dist/leaflet.js" integrity="sha512-nMMmRyTVoLYqjP9hrbed9S+FzjZHW5gY1TWCHA5ckwXZBadntCNs8kEqAWdrb9O7rxbCaA4lKTIWjDXZxflOcA==" crossorigin=""></script>
+<script src="https://cdn.jsdelivr.net/gh/holtzy/D3-graph-gallery@master/LIB/d3.layout.cloud.js"></script>
+
+<!-- Create elements of the data vizualiation -->
+<div id="mapid"></div>
+<div id="histo"></div>
+<div id="bubble"></div>
+<div id="worcloud"></div>
+
+<!-- Define style of each element -->
+<style type="text/css">
+html, body{width: 100%; height: 100%; padding: 0; margin: 0}
+div{position: absolute; padding: 1em; border: 1px solid #000}
+#mapid{background: #f09; top: 0; left: 0; right: 50%; bottom: 50%}
+#histo{background: #FF5173; top: 0; left: 50%; right: 0; bottom: 0%}
+#bubble{background: #FF5173; top: 50%; left: 0; right: 50%; bottom: 0}
+.bar { fill: white; }
+#worcloud{background: #FF5173; top: 66%; left: 50%; right: 0%; bottom: 0%}
+</style>
+
+<body>
+       
+	<script id ="map">
+	var toulouse = [];
+	// Load data
+	d3.csv("data/toulouse1.csv", function(toulouse){
+	   
+		console.log(toulouse);
+		
+		// mapid is the id of the div where the map will appear
+		var map = L
+		  .map('mapid')
+		  .setView([43.6006786,1.3628011], 11 );   // zoom on Toulouse
+
+
+		// Add a tile to the map = a background. Comes from OpenStreetmap
+		L.tileLayer(
+			'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+			attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a>',
+			maxZoom: 16
+			}).addTo(map);
+
+		// Add a svg layer to the map
+		L.svg().addTo(map);
+
+		// Select the svg area and add circles:
+		d3.select("#mapid")
+		  .select("svg")
+		  .selectAll("myCircles")
+		  .data(toulouse)
+		  .enter()
+		  .append("circle")
+			.attr("cx", function(c){ return map.latLngToLayerPoint([c.lat, c.lon]).x })
+			.attr("cy", function(c){ return map.latLngToLayerPoint([c.lat, c.lon]).y })
+			.attr("r", 6)
+			.style("fill", function(d){ 
+				if (d.CATEGORIE == "PME") {
+				return "blue";
+				} else if (d.CATEGORIE == "TPE" ) {
+				return "green";
+				}
+				else {return "red";}
+				})
+			.attr("stroke", "white")
+			.attr("stroke-width", .3)
+			.attr("fill-opacity", 1)
+				
+		// Function that update circle position if something change
+		function update_circle_position() {
+		  d3.selectAll("circle")
+			.data(toulouse)
+			.attr("cx", function(c){ return map.latLngToLayerPoint([c.lat, c.lon]).x })
+			.attr("cy", function(c){ return map.latLngToLayerPoint([c.lat, c.lon]).y })
+		}
+
+		// If the user change the map (zoom or drag), I update circle position:
+		map.on("moveend", update_circle_position)
+		});
+	</script>
+	
+	<script id="Histogram">
+	// set the dimensions and margins of the graph
+	var margin = {top: 20, right: 20, bottom: 100, left: 30},
+		width = 700,
+		height = 250;
+
+	// set the ranges
+	var x = d3.scaleBand()
+			  .range([0, width])
+			  .padding(0.1);
+	var y = d3.scaleLinear()
+			  .range([height, 0]);
+			  
+	// append the svg object to the body of the page
+	// append a 'group' element to 'svg'
+	// moves the 'group' element to the top left margin
+	var svg = d3.select("#bubble").append("svg")
+		.attr("width", width + margin.left + margin.right)
+		.attr("height", height + margin.top + margin.bottom)
+		.append("g")
+		.attr("transform",  "translate(" + margin.left + "," + margin.top + ")");
+
+	// get the data
+	d3.csv("data/toulouse1.csv", function(error, data) {
+	  if (error) throw error;
+
+	  // format the data
+	  data.forEach(function(d) {
+		var temp = d.EFFECTIF.split("-");
+		var eff = temp[1];
+		console.log(eff);
+		d.EFFECTIF = +eff;
+	  });
+
+	  // Scale the range of the data in the domains
+	  x.domain(data.map(function(d) { return d.NOM; }));
+	  y.domain([0, d3.max(data, function(d) { return d.EFFECTIF; })]);
+
+	  // append the rectangles for the bar chart
+	  svg.selectAll(".bar")
+		  .data(data)
+		.enter().append("rect")
+		  .attr("class", "bar")
+		  .attr("x", function(d) { return x(d.NOM); })
+		  .attr("width", x.bandwidth())
+		  .attr("y", function(d) { return y(d.EFFECTIF); })
+		  .attr("height", function(d) { return height - y(d.EFFECTIF); });
+
+	  // add the x Axis
+	  svg.append("g")
+		  .attr("transform", "translate(0," + height + ")")
+		  .call(d3.axisBottom(x))
+		  .selectAll("text")	
+				.style("text-anchor", "end")
+				.attr("dx", "-.8em")
+				.attr("dy", ".15em")
+				.attr("transform", "rotate(-65)");
+
+	  // add the y Axis
+	  svg.append("g")
+		  .call(d3.axisLeft(y));
+
+	});
+
+</script>
+
+	<script id="Bubble">
+            //Declare field activities and how many society worked on
+            dataset = {
+                "children": [
+                    {"Name":"Robotique","Count":4},
+                    {"Name":"Vision par ordinateur","Count":18},
+                    {"Name":"Machine Learning","Count":48},
+                    {"Name":"Deep Learning","Count":41},
+                    {"Name":"Systeme de recommandation","Count":9},
+                    {"Name":"NLP","Count":29},
+                    {"Name":"Ethique","Count":3},
+                    {"Name":"System Expert","Count":11},
+                    {"Name":"Autre","Count":6}]
+            };
+			
+			//Declare diameter and color of circles
+            var diameter = 500;
+            var color = d3.scaleOrdinal(d3.schemeCategory20);
+
+            var bubble = d3.pack(dataset)
+                .size([diameter, diameter])
+                .padding(1.5);
+
+            var svg_bubble = d3.select("#histo")
+                .append("svg")
+                .attr("width", diameter)
+                .attr("height", diameter)
+                .attr("class", "bubble");
+
+            var nodes = d3.hierarchy(dataset)
+                .sum(function(d) { return d.Count; });
+
+            var node = svg_bubble.selectAll(".node")
+                .data(bubble(nodes).descendants())
+                .enter()
+                .filter(function(d){
+                    return  !d.children
+                })
+                .append("g")
+                .attr("class", "node")
+                .attr("transform", function(d) {
+                    return "translate(" + d.x + "," + d.y + ")";
+                });
+
+            node.append("title")
+                .text(function(d) {
+                    return d.Name + ": " + d.Count;
+                });
+
+            node.append("circle")
+                .attr("r", function(d) {
+                    return d.r;
+                })
+                .style("fill", function(d,i) {
+                    return color(i);
+                });
+
+            node.append("text")
+                .attr("dy", ".2em")
+                .style("text-anchor", "middle")
+                .text(function(d) {
+                    return d.data.Name.substring(0, d.r / 3);
+                })
+                .attr("font-family", "sans-serif")
+                .attr("font-size", function(d){
+                    if(d.data.Count > 6)return d.r/5
+                    else return d.r/3;
+                })
+                .attr("fill", "white");
+
+            node.append("text")
+                .attr("dy", "1.3em")
+                .style("text-anchor", "middle")
+                .text(function(d) {
+                    return d.data.Count;
+                })
+                .attr("font-family",  "Gill Sans", "Gill Sans MT")
+                .attr("font-size", function(d){
+                    return d.r/5;
+                })
+                .attr("fill", "white");
+
+            d3.select(self.frameElement)
+                .style("height", diameter + "px");
+        </script>
+
+	<script id ="Wordcloud">
+
+	// List of most frequents words in society description
+	var myWords = [{"word":"Toulouse","size": 5},
+		{"word":"développe","size": 5},
+		{"word":"techniques","size": 4},
+		{"word":"apprentissage","size": 4},
+		{"word":"données","size": 15},
+		{"word":"temps","size": 5},
+		{"word":"solutions","size": 11},
+		{"word":"réel","size": 4},
+		{"word":"conseil","size": 4},
+		{"word":"Artificielle","size": 4},
+		{"word":"clients","size": 5},
+		{"word":"valorisation","size": 5},
+		{"word":"data","size": 4},
+		{"word":"IA","size": 6},
+		{"word":"mieux","size": 5},
+		{"word":"domaine","size": 4},
+		{"word":"langage","size": 4},
+		{"word":"personnes","size": 5},
+		{"word":"expertise","size": 4},
+		{"word":"monde","size": 4},
+		{"word":"services","size": 6},
+		{"word":"intelligence","size": 4},
+		{"word":"artificielle","size": 6},
+		{"word":"recherche","size": 4},
+		{"word":"logiciel","size": 4},
+		{"word":"service","size": 5},
+		{"word":"client","size": 4},
+		{"word":"Synapse","size": 6} ]
+
+	// set the dimensions and margins of the graph
+	var margin_cloud = {top: 10, right: 10, bottom: 10, left: 10 },
+		width_cloud = 700 - margin_cloud.left - margin_cloud.right,
+		height_cloud = 200 - margin_cloud.top - margin_cloud.bottom;
+
+	// append the svg object to the body of the page
+	var svg_cloud = d3.select("#worcloud").append("svg")
+		.attr("width", width_cloud + margin_cloud.left + margin_cloud.right)
+		.attr("height", height_cloud + margin_cloud.top + margin_cloud.bottom)
+	  .append("g")
+		.attr("transform",
+			  "translate(" + margin_cloud.left + "," + margin_cloud.top + ")");
+
+	// Constructs a new cloud layout instance. It run an algorithm to find the position of words that suits your requirements
+	// Wordcloud features that are different from one word to the other must be here
+	var layout = d3.layout.cloud()
+	  .size([width_cloud, height_cloud])
+	  .words(myWords.map(function(d) { return {text: d.word, size:d.size*6}; }))
+	  .padding(5)        //space between words
+	  .rotate(function() { return ~~(Math.random() * 2) * 90; })
+	  .fontSize(function(d) { return d.size; })      // font size of words
+	  .on("end", draw);
+	layout.start();
+
+	// This function takes the output of 'layout' above and draw the words
+	// Wordcloud features that are THE SAME from one word to the other can be here
+	function draw(words) {
+	  svg_cloud
+		.append("g")
+		  .attr("transform", "translate(" + layout.size()[0] / 2 + "," + layout.size()[1] / 2 + ")")
+		  .selectAll("text")
+			.data(words)
+		  .enter().append("text")
+			.style("font-size", function(d) { return d.size; })
+			.style("fill", "#69b3a2")
+			.attr("text-anchor", "middle")
+			.style("font-family", "Impact")
+			.attr("transform", function(d) {
+			  return "translate(" + [d.x, d.y] + ")rotate(" + d.rotate + ")";
+			})
+			.text(function(d) { return d.text; });
+	}
+	</script>
+	
+</div>
+</body>
